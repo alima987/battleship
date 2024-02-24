@@ -31,6 +31,18 @@ export class Room {
         this.users = new Array<userInRoom>;
         this.activeuserIdx = 0;
     }
+    addUser(newUser: User): boolean {
+        let idx = this.users.findIndex(el => { el.user.login === newUser.login; });
+        if (idx < 0) {
+            if (this.users.length < 2) {
+                const user = new userInRoom(newUser, this.users.length);
+                this.users.push(user);
+                const idx = this.users.length - 1;
+                return true;
+            }
+        }
+        return false;
+    }
     toJSON() {
         let json = {
             roomId: this.id,

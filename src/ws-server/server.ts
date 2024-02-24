@@ -5,10 +5,11 @@ import { Session, Message } from '../responces/session-message';
 import { Room } from '../responces/rooms';
 export const server = http.createServer();
 const wss = new WebSocketServer({ server });
-
+let roomId = 1;
 const users = new Map<string, User>();
 const usersSession = new Map<string, Session>();
 const rooms = new Set<Room>();
+const roomById = new Map<number, Room>();
 function getUser(login: string): User | undefined {
     const user = users.get(login);
     if (user) {
@@ -99,12 +100,36 @@ function getAvaliableRooms(): Message {
 
     return new Message('update_room', data, 'all');
 }
+function createRoom(session: Session, request: Message): Message {
+    let err: boolean = true;
+    let erTxt: string = 'Unable to create a room';
+    const user = session.user;
+    if (user) {
+        const id = roomId++;
+        const newRooms = new Room(id);
+        newRooms.addUser(user);
+        rooms.add(newRooms);
+        roomById.set(id, newRooms);
+        const res = getAvaliableRooms();
+        res.rcpt = 'all';
+        return res;
+    }
+
+    return new Message(request.type, {
+        error: err,
+        errorText: erTxt,
+    }, 'all');
+}
 export function processServer(session: Session, request: Message): Message[] {
     let response = new Array<Message>;
 
     switch (request.type) {
         case "reg":
             response.push(registerUser(session, request));
+            response.push(getAvaliableRooms());
+            break;
+        case "create_room":
+            response.push(createRoom(session, request));
             break;
         default:
             response.push(new Message("error", { 'error': true, 'errorText': "Unknow message type" }));
@@ -113,3 +138,4 @@ export function processServer(session: Session, request: Message): Message[] {
 
     return response;
 }
+
