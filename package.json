@@ -1,0 +1,46 @@
+{
+    "name": "ws_task",
+    "version": "1.0.0",
+    "description": "Template for the WebSocket remote control task",
+    "main": "index.ts",
+    "scripts": {
+        "start": "ts-node ./index.ts",
+        "start:dev": "nodemon ./index.ts",
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "wss": "ts-node src/ws_server/server.ts"
+    },
+    "author": "Andrei Auchynnikau",
+    "keywords": [],
+    "license": "ISC",
+    "devDependencies": {
+        "@types/uuid": "^9.0.2",
+        "@types/ws": "^8.5.5",
+        "nodemon": "^3.0.1",
+        "ts-loader": "^9.4.4",
+        "ts-node": "^10.9.1",
+        "ts-node-dev": "^2.0.0",
+        "typescript": "^5.1.6"
+    },
+    "dependencies": {
+        "uuid": "^9.0.0",
+        "ws": "^8.13.0"
+    },
+    "compilerOptions": {
+        "outDir": "./dist",
+        "jsx": "react-jsx",
+        "lib": [
+            "es6",
+            "dom"
+        ],
+        "sourceMap": true,
+        "module": "ESNext",
+        "moduleResolution": "Node",
+        "target": "es6",
+        "strict": true,
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}
