@@ -1,8 +1,9 @@
 import * as http from 'http';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import { User } from "../responces/user";
-import { Session, Message } from '../responces/session-message';
+import { Session, Message, StateSession} from '../responces/session-message';
 import { Room } from '../responces/rooms';
+import * as uuid from 'uuid';
 export const server = http.createServer();
 const wss = new WebSocketServer({ server });
 let roomId = 1;
@@ -11,6 +12,7 @@ const usersSession = new Map<string, Session>();
 const rooms = new Set<Room>();
 const roomById = new Map<number, Room>();
 const winnersMap = new Map<string, number>();
+const sessionsMap = new Set<Session>();
 function getUser(login: string): User | undefined {
     const user = users.get(login);
     if (user) {
@@ -136,6 +138,43 @@ function updateWinners(winner: string = ''): Message {
 
     return new Message('update_winners', data, 'all');
 }
+function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
+    msgs.forEach(msg => {
+        const str: string = msg.toString();
+
+        switch (msg.rcpt) {
+            case 'none':
+                break;
+            case 'all':
+                console.log("Send message to ALL");
+                console.log('<-\nResponse:', JSON.parse(str));
+                wss.clients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(str);
+                    }
+                });
+                break;
+            case '':
+                console.log("Send message to default recipient");
+                console.log('<-\nResponse:', JSON.parse(str));
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(str);
+                }
+                break;
+            default:
+                console.log("Send message to " + msg.rcpt);
+                console.log('<-\nResponse:', JSON.parse(str));
+                const session = usersSession.get(msg.rcpt);
+                if (session) {
+                    if (session.ws.readyState === WebSocket.OPEN) {
+                        session.ws.send(str);
+                    }
+                }
+                break;
+        }
+    });
+}
+
 export function processServer(session: Session, request: Message): Message[] {
     let response = new Array<Message>;
 
@@ -155,4 +194,40 @@ export function processServer(session: Session, request: Message): Message[] {
 
     return response;
 }
+wss.on('connection', (ws: WebSocket) => {
+    const session: Session = new Session(uuid.v4(), ws, StateSession.OPEN);
+    sessionsMap.add(session);
+    console.log(`Created session [${session}]`);
+
+    ws.on('message', (message: string) => {
+        console.log(`Session is [${session.id}]`);
+        try {
+            console.log('->\nRequest:', JSON.parse(message));
+            const msg = Message.fromJson(JSON.parse(message));
+            let response: Message[] = processServer(session, msg);
+            sendMess(wss, ws, response);
+        } catch (error) {
+            console.log(error);
+        }
+    });
+
+    ws.on('close', () => {
+        console.log('Connection closed');
+        const user = session.user;
+        if (user) {
+            usersSession.delete(user.login);
+            rooms.forEach(room => {
+                room.users.forEach((p, i) => {
+                    if (p.user && p.user.login === user.login) {
+                        const activeuser = i > 0 ? 0 : 1;
+                        sendMess(wss, ws, win(room, activeuser));
+                    }
+                });
+            });
+        }
+        sessionsMap.delete(session);
+    });
+
+    ws.send(Message.fromJson({ type: "connected", data: { session: session.id }, id: 0 }).toString());
+});
 
