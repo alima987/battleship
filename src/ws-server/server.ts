@@ -10,6 +10,7 @@ const users = new Map<string, User>();
 const usersSession = new Map<string, Session>();
 const rooms = new Set<Room>();
 const roomById = new Map<number, Room>();
+const winnersMap = new Map<string, number>();
 function getUser(login: string): User | undefined {
     const user = users.get(login);
     if (user) {
@@ -120,6 +121,21 @@ function createRoom(session: Session, request: Message): Message {
         errorText: erTxt,
     }, 'all');
 }
+function updateWinners(winner: string = ''): Message {
+    if (winner.length) {
+        let wins = winnersMap.get(winner) || 0;
+        wins++;
+        winnersMap.set(winner, wins);
+    }
+    let data: any[] = [];
+
+    winnersMap.forEach((v, k) => {
+        data.push({ name: k, wins: v });
+    });
+    data.sort((a, b) => { return (b.wins - a.wins) });
+
+    return new Message('update_winners', data, 'all');
+}
 export function processServer(session: Session, request: Message): Message[] {
     let response = new Array<Message>;
 
@@ -127,6 +143,7 @@ export function processServer(session: Session, request: Message): Message[] {
         case "reg":
             response.push(registerUser(session, request));
             response.push(getAvaliableRooms());
+            response.push(updateWinners());
             break;
         case "create_room":
             response.push(createRoom(session, request));
