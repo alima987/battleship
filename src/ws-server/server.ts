@@ -2,11 +2,13 @@ import * as http from 'http';
 import { WebSocketServer } from 'ws';
 import { User } from "../responces/user";
 import { Session, Message } from '../responces/session-message';
+import { Room } from '../responces/rooms';
 export const server = http.createServer();
 const wss = new WebSocketServer({ server });
 
 const users = new Map<string, User>();
 const usersSession = new Map<string, Session>();
+const rooms = new Set<Room>();
 function getUser(login: string): User | undefined {
     const user = users.get(login);
     if (user) {
@@ -85,6 +87,17 @@ function registerUser(session: Session, request: Message): Message {
         error: err,
         errorText: erTxt,
     });
+}
+
+function getAvaliableRooms(): Message {
+    let data: any[] = [];
+    rooms.forEach(room => {
+        if (room.users.length === 1) {
+            data.push(room.toJSON());
+        }
+    });
+
+    return new Message('update_room', data, 'all');
 }
 export function processServer(session: Session, request: Message): Message[] {
     let response = new Array<Message>;
