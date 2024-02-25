@@ -138,6 +138,33 @@ function updateWinners(winner: string = ''): Message {
 
     return new Message('update_winners', data, 'all');
 }
+function addUsersToRoom(session: Session, request: Message): Message[] {
+    let err: boolean = true;
+    let erTxt: string = 'Unable to add user to the room';
+    const user = session.user;
+    const data = JSON.parse(request.data);
+    const roomIds = data.indxRoom;
+    const resps = new Array<Message>;
+    if (user && roomIds) {
+        // console.log("user is " + user.login);
+        const room = roomById.get(roomId);
+        if (room) {
+            if (room.users.length === 1 && room.users[0].user.login != user.login) {
+                // Add the second user
+                room.addUser(user);
+                resps.push(getAvaliableRooms());
+                resps.push(new Message(
+                    'create_game', { idGame: roomId, iduser: 1 }
+                ));
+                resps.push(new Message(
+                    'create_game', { idGame: roomId, iduser: 0 }, room.users[0].user.login
+                ));
+            }
+        }
+    }
+
+    return resps;
+}
 function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
     msgs.forEach(msg => {
         const str: string = msg.toString();
