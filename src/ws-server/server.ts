@@ -2,7 +2,7 @@ import * as http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { User } from "../responces/user";
 import { Session, Message, StateSession} from '../responces/session-message';
-import { Room } from '../responces/rooms';
+import { Room, UserState } from '../responces/rooms';
 import * as uuid from 'uuid';
 export const server = http.createServer();
 const wss = new WebSocketServer({ server });
@@ -146,11 +146,9 @@ function addUsersToRoom(session: Session, request: Message): Message[] {
     const roomIds = data.indxRoom;
     const resps = new Array<Message>;
     if (user && roomIds) {
-        // console.log("user is " + user.login);
         const room = roomById.get(roomId);
         if (room) {
             if (room.users.length === 1 && room.users[0].user.login != user.login) {
-                // Add the second user
                 room.addUser(user);
                 resps.push(getAvaliableRooms());
                 resps.push(new Message(
@@ -164,6 +162,21 @@ function addUsersToRoom(session: Session, request: Message): Message[] {
     }
 
     return resps;
+}
+function win(room: Room, winner: number): Message[] {
+    const resp = new Array<Message>;
+    if (room && room.userNumInState(UserState.READY) === 2) {
+        resp.push(new Message('finish', {
+            winUser: winner
+        }, room.users[0].user.login));
+        resp.push(new Message('finish', {
+            winUser: winner
+        }, room.users[1].user.login));
+        rooms.delete(room);
+        resp.push(getAvaliableRooms());
+        resp.push(updateWinners(room.users[winner].user.login));
+    }
+    return resp;
 }
 function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
     msgs.forEach(msg => {
@@ -213,6 +226,11 @@ export function processServer(session: Session, request: Message): Message[] {
             break;
         case "create_room":
             response.push(createRoom(session, request));
+            break;
+        case "add_user_to_room":
+            addUsersToRoom(session, request).forEach(resp => {
+                response.push(resp);
+            });
             break;
         default:
             response.push(new Message("error", { 'error': true, 'errorText': "Unknow message type" }));

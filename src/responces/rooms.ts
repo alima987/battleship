@@ -43,6 +43,15 @@ export class Room {
         }
         return false;
     }
+    userNumInState(state: UserState): number {
+        let num = 0;
+        this.users.forEach(player => {
+            if (player.state === state) {
+                num++;
+            }
+        });
+        return num;
+    }
     toJSON() {
         let json = {
             roomId: this.id,
