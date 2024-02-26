@@ -191,6 +191,46 @@ function turn(room: Room, activeUser: number): Message[] {
     }
     return resp;
 }
+function addShips(session: Session, request: Message): Message[] {
+    let err: boolean = true;
+    let erTxt: string = 'Unable to add ships';
+    let rcpt = '';
+    const data = JSON.parse(request.data);
+    const roomsId = data.gameId;
+    const resp = new Array<Message>;
+    const room = roomById.get(roomsId);
+    if (room) {
+        const userIdx = data.indexUser;
+        if (room.addRoomShip(userIdx, data.ships)) {
+            if (room.userNumInState(UserState.READY) === 2) {
+                const activeUser = Math.round(Math.random());
+                resp.push(new Message('start_game', {
+                    ship: room.users[0].game.shipAsJson(),
+                    currUserIndx: activeUser
+                }, room.users[0].user.login));
+                resp.push(new Message('start_game', {
+                    ship: room.users[1].game.shipAsJson(),
+                    currUserIndx: activeUser
+                }, room.users[1].user.login));
+                resp.push(...turn(room, activeUser));
+                return resp;
+            }
+            else {
+                err = false;
+                erTxt = 'Ships added';
+                rcpt = 'none';
+            }
+        }
+
+    }
+
+    resp.push(new Message(request.type, {
+        error: err,
+        errorText: erTxt,
+    }, rcpt));
+
+    return resp;
+}
 function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
     msgs.forEach(msg => {
         const str: string = msg.toString();
@@ -242,6 +282,11 @@ export function processServer(session: Session, request: Message): Message[] {
             break;
         case "add_user_to_room":
             addUsersToRoom(session, request).forEach(resp => {
+                response.push(resp);
+            });
+            break;
+        case "add_ships":
+            addShips(session, request).forEach(resp => {
                 response.push(resp);
             });
             break;

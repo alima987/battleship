@@ -1,15 +1,19 @@
 import { User } from "./user";
+import { Game } from "./game";
+import { Ship } from "./ship";
 class userInRoom {
     user: User;
     idx: number;
     state: UserState;
     shipsPlacedCount: number;
+    game: Game;
 
     constructor(user: User, idx: number, state: UserState = UserState.CONNECTED) {
         this.user = user;
         this.idx = idx;
         this.state = state;
         this.shipsPlacedCount = 0;
+        this.game = new Game();
     }
 }
 export enum UserState {
@@ -45,12 +49,25 @@ export class Room {
     }
     userNumInState(state: UserState): number {
         let num = 0;
-        this.users.forEach(player => {
-            if (player.state === state) {
+        this.users.forEach(user => {
+            if (user.state === state) {
                 num++;
             }
         });
         return num;
+    }
+    addRoomShip(userIdx: number, ships: Array<{ poistion: { x: number, y: number }, type: string, length: number }>): boolean {
+        const user = this.users[userIdx];
+        if (user) {
+            const field = user.game;
+            ships.forEach(element => {
+                const ship = Ship.fromJson(element);
+                if (!field.addGameShip(ship)) return false;
+            });
+            user.state = UserState.READY;
+            return true;
+        }
+        return false;
     }
     toJSON() {
         let json = {
