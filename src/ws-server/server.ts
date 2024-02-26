@@ -1,42 +1,49 @@
 import * as http from 'http';
-import { WebSocketServer, WebSocket } from 'ws';
-import { User } from "../responces/user";
-import { Session, Message, StateSession} from '../responces/session-message';
-import { Room, UserState } from '../responces/rooms';
+import { WebSocket, WebSocketServer } from 'ws';
+import { Player } from '../responces/user';
+import { Message } from '../responces/session-message';
+import { PlayerState, Room } from '../responces/rooms';
 import * as uuid from 'uuid';
+import { Session, SessionState } from '../responces/session-message';
+
+
 export const server = http.createServer();
 const wss = new WebSocketServer({ server });
-let roomId = 1;
-const users = new Map<string, User>();
-const usersSession = new Map<string, Session>();
+
+const players = new Map<string, Player>();
+const sessions = new Set<Session>();
 const rooms = new Set<Room>();
-const roomById = new Map<number, Room>();
-const winnersMap = new Map<string, number>();
-const sessionsMap = new Set<Session>();
-function getUser(login: string): User | undefined {
-    const user = users.get(login);
-    if (user) {
-        console.log(`user: login: [${user?.login}]`);
+let roomIdx = 1;
+const playersSessions = new Map<string, Session>();
+const roomsById = new Map<number, Room>();
+const winners = new Map<string, number>();
+
+function getPlayer(login: string): Player | undefined {
+    const player = players.get(login);
+    if (player) {
+        console.log(`player: login: [${player?.login}]`);
     }
     else {
-        console.log(`user [${login}] is not found`);
+        console.log(`Player [${login}] is not found`);
     }
-    return user;
+    return player;
 }
-function addUser(user: User) {
-    users.set(user.login, user);
+
+function addPlayer(player: Player) {
+    players.set(player.login, player);
 }
 
 function checkPassword(login: string, password: string): boolean {
-    const user = getUser(login);
-    if (user && user.password === password) {
+    const player = getPlayer(login);
+    if (player && player.password === password) {
         return true;
     }
 
     return false;
 }
-function getUserSession(user: User): Session | undefined {
-    const session = usersSession.get(user.login);
+
+function getPlayerSession(player: Player): Session | undefined {
+    const session = playersSessions.get(player.login);
     if (session) {
         return session;
     }
@@ -44,21 +51,21 @@ function getUserSession(user: User): Session | undefined {
 }
 
 
-function registerUser(session: Session, request: Message): Message {
+function registerPlayer(session: Session, request: Message): Message {
     let { name, password } = JSON.parse(request.data);
     let err: boolean = false;
     let erTxt: string = '';
     if (name && password) {
-        let user = getUser(name);
-        if (user) {
+        let player = getPlayer(name);
+        if (player) {
             if (!checkPassword(name, password)) {
                 err = true;
                 erTxt = 'Authentication failed.';
             }
             else {
-                let userSession = getUserSession(user);
-                if (userSession) {
-                    if (session.id === userSession.id) {
+                let playerSession = getPlayerSession(player);
+                if (playerSession) {
+                    if (session.id === playerSession.id) {
                         erTxt = 'Repeated registeration.';
                     }
                     else {
@@ -67,18 +74,18 @@ function registerUser(session: Session, request: Message): Message {
                     }
                 }
                 else {
-                    session.user = user;
-                    usersSession.set(user.login, session);
-                    console.log(`user [${user.login}] was registered, session is [${session.id}]`);
+                    session.player = player;
+                    playersSessions.set(player.login, session);
+                    console.log(`Player [${player.login}] was registered, session is [${session.id}]`);
                 }
             }
         }
         else {
-            user = new User(name, password);
-            addUser(user);
-            session.user = user;
-            usersSession.set(user.login, session);
-            console.log(`user [${user.login}] was added, session is [${session.id}]`);
+            player = new Player(name, password);
+            addPlayer(player);
+            session.player = player;
+            playersSessions.set(player.login, session);
+            console.log(`Player [${player.login}] was added, session is [${session.id}]`);
         }
     }
     else {
@@ -93,29 +100,51 @@ function registerUser(session: Session, request: Message): Message {
     });
 }
 
+
 function getAvaliableRooms(): Message {
     let data: any[] = [];
+
     rooms.forEach(room => {
-        if (room.users.length === 1) {
+        if (room.players.length === 1) {
             data.push(room.toJSON());
         }
     });
 
     return new Message('update_room', data, 'all');
 }
+
+
+function updateWinners(winner: string = ''): Message {
+    if (winner.length) {
+        let wins = winners.get(winner) || 0;
+        wins++;
+        winners.set(winner, wins);
+    }
+
+    let data: any[] = [];
+
+    winners.forEach((v, k) => {
+        data.push({ name: k, wins: v });
+    });
+    data.sort((a, b) => { return (b.wins - a.wins) });
+
+    return new Message('update_winners', data, 'all');
+}
+
+
 function createRoom(session: Session, request: Message): Message {
     let err: boolean = true;
     let erTxt: string = 'Unable to create a room';
-    const user = session.user;
-    if (user) {
-        const id = roomId++;
-        const newRooms = new Room(id);
-        newRooms.addUser(user);
-        rooms.add(newRooms);
-        roomById.set(id, newRooms);
-        const res = getAvaliableRooms();
-        res.rcpt = 'all';
-        return res;
+    const player = session.player;
+    if (player) {
+        const id = roomIdx++;
+        const newRoom = new Room(id);
+        newRoom.addPlayer(player);
+        rooms.add(newRoom);
+        roomsById.set(id, newRoom);
+        const resp = getAvaliableRooms();
+        resp.rcpt = 'all';
+        return resp;
     }
 
     return new Message(request.type, {
@@ -123,39 +152,27 @@ function createRoom(session: Session, request: Message): Message {
         errorText: erTxt,
     }, 'all');
 }
-function updateWinners(winner: string = ''): Message {
-    if (winner.length) {
-        let wins = winnersMap.get(winner) || 0;
-        wins++;
-        winnersMap.set(winner, wins);
-    }
-    let data: any[] = [];
 
-    winnersMap.forEach((v, k) => {
-        data.push({ name: k, wins: v });
-    });
-    data.sort((a, b) => { return (b.wins - a.wins) });
 
-    return new Message('update_winners', data, 'all');
-}
-function addUsersToRoom(session: Session, request: Message): Message[] {
+function addPlayer2Room(session: Session, request: Message): Message[] {
     let err: boolean = true;
-    let erTxt: string = 'Unable to add user to the room';
-    const user = session.user;
+    let erTxt: string = 'Unable to add player to the room';
+    const player = session.player;
     const data = JSON.parse(request.data);
-    const roomIds = data.indxRoom;
+    const roomId = data.indexRoom;
+
     const resps = new Array<Message>;
-    if (user && roomIds) {
-        const room = roomById.get(roomId);
+    if (player && roomId) {
+        const room = roomsById.get(roomId);
         if (room) {
-            if (room.users.length === 1 && room.users[0].user.login != user.login) {
-                room.addUser(user);
+            if (room.players.length === 1 && room.players[0].player.login != player.login) {
+                room.addPlayer(player);
                 resps.push(getAvaliableRooms());
                 resps.push(new Message(
-                    'create_game', { idGame: roomId, iduser: 1 }
+                    'create_game', { idGame: roomId, idPlayer: 1 }
                 ));
                 resps.push(new Message(
-                    'create_game', { idGame: roomId, iduser: 0 }, room.users[0].user.login
+                    'create_game', { idGame: roomId, idPlayer: 0 }, room.players[0].player.login
                 ));
             }
         }
@@ -163,57 +180,67 @@ function addUsersToRoom(session: Session, request: Message): Message[] {
 
     return resps;
 }
+
+
+function turn(room: Room, activePlayer: number): Message[] {
+    const resps = new Array<Message>;
+
+    if (room && room.numPlayersInState(PlayerState.READY) === 2) {
+        resps.push(new Message('turn', {
+            currentPlayer: activePlayer
+        }, room.players[0].player.login));
+        resps.push(new Message('turn', {
+            currentPlayer: activePlayer
+        }, room.players[1].player.login));
+        room.activePlayerIdx = activePlayer;
+    }
+    return resps;
+}
+
+
 function win(room: Room, winner: number): Message[] {
-    const resp = new Array<Message>;
-    if (room && room.userNumInState(UserState.READY) === 2) {
-        resp.push(new Message('finish', {
-            winUser: winner
-        }, room.users[0].user.login));
-        resp.push(new Message('finish', {
-            winUser: winner
-        }, room.users[1].user.login));
+    const resps = new Array<Message>;
+
+    if (room && room.numPlayersInState(PlayerState.READY) === 2) {
+        resps.push(new Message('finish', {
+            winPlayer: winner
+        }, room.players[0].player.login));
+        resps.push(new Message('finish', {
+            winPlayer: winner
+        }, room.players[1].player.login));
         rooms.delete(room);
-        resp.push(getAvaliableRooms());
-        resp.push(updateWinners(room.users[winner].user.login));
+        resps.push(getAvaliableRooms());
+        resps.push(updateWinners(room.players[winner].player.login));
     }
-    return resp;
+    return resps;
 }
-function turn(room: Room, activeUser: number): Message[] {
-    const resp = new Array<Message>;
-    if (room && room.userNumInState(UserState.READY) === 2) {
-        resp.push(new Message('turn', {
-            currUser: activeUser
-        }, room.users[0].user.login));
-        resp.push(new Message('turn', {
-            currUser: activeUser
-        }, room.users[1].user.login));
-        room.activeuserIdx = activeUser;
-    }
-    return resp;
-}
+
+
 function addShips(session: Session, request: Message): Message[] {
     let err: boolean = true;
     let erTxt: string = 'Unable to add ships';
     let rcpt = '';
     const data = JSON.parse(request.data);
-    const roomsId = data.gameId;
-    const resp = new Array<Message>;
-    const room = roomById.get(roomsId);
+    const roomId = data.gameId;
+    const resps = new Array<Message>;
+    const room = roomsById.get(roomId);
     if (room) {
-        const userIdx = data.indexUser;
-        if (room.addRoomShip(userIdx, data.ships)) {
-            if (room.userNumInState(UserState.READY) === 2) {
-                const activeUser = Math.round(Math.random());
-                resp.push(new Message('start_game', {
-                    ship: room.users[0].game.shipAsJson(),
-                    currUserIndx: activeUser
-                }, room.users[0].user.login));
-                resp.push(new Message('start_game', {
-                    ship: room.users[1].game.shipAsJson(),
-                    currUserIndx: activeUser
-                }, room.users[1].user.login));
-                resp.push(...turn(room, activeUser));
-                return resp;
+        const playerIdx = data.indexPlayer;
+      
+        if (room.addShips(playerIdx, data.ships)) {
+            if (room.numPlayersInState(PlayerState.READY) === 2) {
+                const activePlayer = Math.round(Math.random());
+              
+                resps.push(new Message('start_game', {
+                    ships: room.players[0].gameField.getShipsAsJson(),
+                    currentPlayerIndex: activePlayer
+                }, room.players[0].player.login));
+                resps.push(new Message('start_game', {
+                    ships: room.players[1].gameField.getShipsAsJson(),
+                    currentPlayerIndex: activePlayer
+                }, room.players[1].player.login));
+                resps.push(...turn(room, activePlayer));
+                return resps;
             }
             else {
                 err = false;
@@ -224,27 +251,29 @@ function addShips(session: Session, request: Message): Message[] {
 
     }
 
-    resp.push(new Message(request.type, {
+    resps.push(new Message(request.type, {
         error: err,
         errorText: erTxt,
     }, rcpt));
 
-    return resp;
+    return resps;
 }
+
+
 function attack(session: Session, request: Message): Message[] {
     let err: boolean = true;
     let erTxt: string = 'Unable to attack';
     let rcpt = '';
     const data = JSON.parse(request.data);
     const roomId = data.gameId;
-    const resp = new Array<Message>;
-    const room = roomById.get(roomId);
+    const resps = new Array<Message>;
+    const room = roomsById.get(roomId);
     if (room) {
-        const userIdx = data.indexUser;
-        if (room.activeuserIdx === userIdx) {
+        const playerIdx = data.indexPlayer;
+        if (room.activePlayerIdx === playerIdx) {
             const x = data.x;
             const y = data.y;
-            const diffs = room.attack(userIdx, x, y);
+            const diffs = room.attack(playerIdx, x, y);
             const res = diffs[0].val;
             diffs.forEach(diff => {
                 const val = diff.val
@@ -262,25 +291,25 @@ function attack(session: Session, request: Message): Message[] {
                         resStr = 'miss';
                         break;
                 }
-                resp.push(new Message('attack', {
+                resps.push(new Message('attack', {
                     position: { x: diff.x, y: diff.y },
-                    currentuser: userIdx,
+                    currentPlayer: playerIdx,
                     status: resStr
-                }, room.users[0].user.login));
-                resp.push(new Message('attack', {
+                }, room.players[0].player.login));
+                resps.push(new Message('attack', {
                     position: { x: diff.x, y: diff.y },
-                    currentuser: userIdx,
+                    currentPlayer: playerIdx,
                     status: resStr
-                }, room.users[1].user.login));
+                }, room.players[1].player.login));
             });
             if (res === 4) {
-                const activeuser = userIdx > 0 ? 0 : 1;
-                resp.push(...turn(room, activeuser));
+                const activePlayer = playerIdx > 0 ? 0 : 1;
+                resps.push(...turn(room, activePlayer));
             }
-            else if (res === 3 && room.isEndGame(userIdx)) {
-                resp.push(...win(room, userIdx));
+            else if (res === 3 && room.isGameOver(playerIdx)) {
+                resps.push(...win(room, playerIdx));
             }
-            return resp;
+            return resps;
         }
         else {
             erTxt = 'Not your turn';
@@ -288,53 +317,59 @@ function attack(session: Session, request: Message): Message[] {
 
     }
 
-    resp.push(new Message(request.type, {
+    resps.push(new Message(request.type, {
         error: err,
         errorText: erTxt,
     }, rcpt));
 
-    return resp;
+    return resps;
 }
-function rndAttack(session: Session, request: Message): Message[] {
+
+
+function randomAttack(session: Session, request: Message): Message[] {
     let err: boolean = true;
     let erTxt: string = 'Unable to attack';
     const data = JSON.parse(request.data);
     const roomId = data.gameId;
-    const userIdx = data.indexUser;
-    const resp = new Array<Message>;
-    const room = roomById.get(roomId);
+    const playerIdx = data.indexPlayer;
+    const resps = new Array<Message>;
+    const room = roomsById.get(roomId);
     if (room) {
-        const userIdx = data.indexuser;
-        if (room.activeuserIdx === userIdx) {
-            const { x, y } = room.getRandomAttack(userIdx);
-            resp.push(...attack(session,
+        const playerIdx = data.indexPlayer;
+        if (room.activePlayerIdx === playerIdx) {
+            const { x, y } = room.getRndXY4Attack(playerIdx);
+            resps.push(...attack(session,
                 new Message('attack', JSON.stringify({
                     gameId: roomId,
                     x: x,
                     y: y,
-                    indexuser: userIdx
+                    indexPlayer: playerIdx
                 }))
             ));
-            return resp;
+            return resps;
         }
         else {
             erTxt = 'Not your turn';
         }
     }
-    resp.push(new Message(request.type, {
+
+    resps.push(new Message(request.type, {
         error: err,
         errorText: erTxt,
     }));
-    return resp;
+
+    return resps;
 }
 
-function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
+
+function sendMessages(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
     msgs.forEach(msg => {
         const str: string = msg.toString();
 
         switch (msg.rcpt) {
             case 'none':
                 break;
+
             case 'all':
                 console.log("Send message to ALL");
                 console.log('<-\nResponse:', JSON.parse(str));
@@ -344,6 +379,7 @@ function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
                     }
                 });
                 break;
+
             case '':
                 console.log("Send message to default recipient");
                 console.log('<-\nResponse:', JSON.parse(str));
@@ -351,10 +387,11 @@ function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
                     ws.send(str);
                 }
                 break;
+
             default:
                 console.log("Send message to " + msg.rcpt);
                 console.log('<-\nResponse:', JSON.parse(str));
-                const session = usersSession.get(msg.rcpt);
+                const session = playersSessions.get(msg.rcpt);
                 if (session) {
                     if (session.ws.readyState === WebSocket.OPEN) {
                         session.ws.send(str);
@@ -365,35 +402,40 @@ function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
     });
 }
 
-export function processServer(session: Session, request: Message): Message[] {
+
+function processMessage(session: Session, request: Message): Message[] {
     let response = new Array<Message>;
 
     switch (request.type) {
         case "reg":
-            response.push(registerUser(session, request));
+            response.push(registerPlayer(session, request));
             response.push(getAvaliableRooms());
             response.push(updateWinners());
             break;
+
         case "create_room":
             response.push(createRoom(session, request));
             break;
+
         case "add_user_to_room":
-            addUsersToRoom(session, request).forEach(resp => {
+            addPlayer2Room(session, request).forEach(resp => {
                 response.push(resp);
             });
             break;
+
         case "add_ships":
             addShips(session, request).forEach(resp => {
                 response.push(resp);
             });
             break;
+
         case 'attack':
             attack(session, request).forEach(resp => {
                 response.push(resp);
             });
             break;
-        case 'rndAttack':
-            rndAttack(session, request).forEach(resp => {
+        case 'randomAttack':
+            randomAttack(session, request).forEach(resp => {
                 response.push(resp);
             });
             break;
@@ -404,9 +446,10 @@ export function processServer(session: Session, request: Message): Message[] {
 
     return response;
 }
+
 wss.on('connection', (ws: WebSocket) => {
-    const session: Session = new Session(uuid.v4(), ws, StateSession.OPEN);
-    sessionsMap.add(session);
+    const session: Session = new Session(uuid.v4(), ws, SessionState.OPEN);
+    sessions.add(session);
     console.log(`Created session [${session}]`);
 
     ws.on('message', (message: string) => {
@@ -414,8 +457,8 @@ wss.on('connection', (ws: WebSocket) => {
         try {
             console.log('->\nRequest:', JSON.parse(message));
             const msg = Message.fromJson(JSON.parse(message));
-            let response: Message[] = processServer(session, msg);
-            sendMess(wss, ws, response);
+            let response: Message[] = processMessage(session, msg);
+            sendMessages(wss, ws, response);
         } catch (error) {
             console.log(error);
         }
@@ -423,21 +466,20 @@ wss.on('connection', (ws: WebSocket) => {
 
     ws.on('close', () => {
         console.log('Connection closed');
-        const user = session.user;
-        if (user) {
-            usersSession.delete(user.login);
+        const player = session.player;
+        if (player) {
+            playersSessions.delete(player.login);
             rooms.forEach(room => {
-                room.users.forEach((p, i) => {
-                    if (p.user && p.user.login === user.login) {
-                        const activeuser = i > 0 ? 0 : 1;
-                        sendMess(wss, ws, win(room, activeuser));
+                room.players.forEach((p, i) => {
+                    if (p.player && p.player.login === player.login) {
+                        const activePlayer = i > 0 ? 0 : 1;
+                        sendMessages(wss, ws, win(room, activePlayer));
                     }
                 });
             });
         }
-        sessionsMap.delete(session);
+        sessions.delete(session);
     });
 
     ws.send(Message.fromJson({ type: "connected", data: { session: session.id }, id: 0 }).toString());
 });
-

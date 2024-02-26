@@ -1,26 +1,29 @@
 import { OPEN } from "ws";
+import { Player } from "./user";
 import WebSocket from "ws";
-import { User } from "./user";
 
-export enum StateSession {
+export enum SessionState {
     OPEN,
     CLOSED,
     SUSPENDED,
     TERMINATED
 }
+
 export class Session {
     id: string;
-    user?: User;
-    state: StateSession;
+    player?: Player;
+    state: SessionState;
     ws: WebSocket;
 
-    constructor(id: string, ws: WebSocket, state: StateSession = OPEN) {
+
+    constructor(id: string, ws: WebSocket, state: SessionState = OPEN) {
         this.id = id;
         this.ws = ws;
         this.state = state;
-        this.user = undefined;
+        this.player = undefined;
     }
 };
+
 export class Message {
     type: string;
     id: number;
@@ -33,12 +36,10 @@ export class Message {
         this.id = id;
         this.rcpt = rcpt;
     }
-
     static fromJson(json: any): Message {
         const { type, data, id } = json;
         return new Message(type, data, id);
     }
-
     toString(): string {
         return JSON.stringify({
             'type': this.type,

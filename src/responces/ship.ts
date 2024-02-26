@@ -1,19 +1,21 @@
-export enum StateShip {
+export enum ShipState {
+    NONE,
     HEALTY,
     HIT,
     KILLED,
-    NONE,
 }
+
+
 export class Ship {
-    state: number;
-    length: number;
     type: string;
-    direction: boolean;
-    hits: number;
     start_x: number;
     start_y: number;
     end_x: number;
     end_y: number;
+    state: number;
+    length: number;
+    direction: boolean;
+    hits: number;
 
     constructor(pos_x: number, pos_y: number, direction: boolean, type: string, length: number = 1) {
         this.start_x = pos_x;
@@ -28,13 +30,15 @@ export class Ship {
         }
         this.type = type;
         this.length = length;
-        this.state = StateShip.HEALTY;
+        this.state = ShipState.HEALTY;
         this.direction = direction;
         this.hits = 0;
     }
+
     toJson(): any {
         return { position: { x: this.start_x, y: this.start_y }, direction: this.direction, length: this.length, type: this.type };
     }
+
     static fromJson(json: any): Ship {
         const { position, direction, type, length } = json;
         const { x, y } = position;
