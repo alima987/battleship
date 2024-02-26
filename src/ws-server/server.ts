@@ -295,6 +295,39 @@ function attack(session: Session, request: Message): Message[] {
 
     return resp;
 }
+function rndAttack(session: Session, request: Message): Message[] {
+    let err: boolean = true;
+    let erTxt: string = 'Unable to attack';
+    const data = JSON.parse(request.data);
+    const roomId = data.gameId;
+    const userIdx = data.indexUser;
+    const resp = new Array<Message>;
+    const room = roomById.get(roomId);
+    if (room) {
+        const userIdx = data.indexuser;
+        if (room.activeuserIdx === userIdx) {
+            const { x, y } = room.getRandomAttack(userIdx);
+            resp.push(...attack(session,
+                new Message('attack', JSON.stringify({
+                    gameId: roomId,
+                    x: x,
+                    y: y,
+                    indexuser: userIdx
+                }))
+            ));
+            return resp;
+        }
+        else {
+            erTxt = 'Not your turn';
+        }
+    }
+    resp.push(new Message(request.type, {
+        error: err,
+        errorText: erTxt,
+    }));
+    return resp;
+}
+
 function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
     msgs.forEach(msg => {
         const str: string = msg.toString();
@@ -356,6 +389,11 @@ export function processServer(session: Session, request: Message): Message[] {
             break;
         case 'attack':
             attack(session, request).forEach(resp => {
+                response.push(resp);
+            });
+            break;
+        case 'rndAttack':
+            rndAttack(session, request).forEach(resp => {
                 response.push(resp);
             });
             break;
