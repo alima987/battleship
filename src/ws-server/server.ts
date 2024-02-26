@@ -231,6 +231,70 @@ function addShips(session: Session, request: Message): Message[] {
 
     return resp;
 }
+function attack(session: Session, request: Message): Message[] {
+    let err: boolean = true;
+    let erTxt: string = 'Unable to attack';
+    let rcpt = '';
+    const data = JSON.parse(request.data);
+    const roomId = data.gameId;
+    const resp = new Array<Message>;
+    const room = roomById.get(roomId);
+    if (room) {
+        const userIdx = data.indexUser;
+        if (room.activeuserIdx === userIdx) {
+            const x = data.x;
+            const y = data.y;
+            const diffs = room.attack(userIdx, x, y);
+            const res = diffs[0].val;
+            diffs.forEach(diff => {
+                const val = diff.val
+                let resStr: string;
+                switch (val) {
+                    case 2:
+                        resStr = 'shot';
+                        break;
+
+                    case 3:
+                        resStr = 'killed';
+                        break;
+
+                    default:
+                        resStr = 'miss';
+                        break;
+                }
+                resp.push(new Message('attack', {
+                    position: { x: diff.x, y: diff.y },
+                    currentuser: userIdx,
+                    status: resStr
+                }, room.users[0].user.login));
+                resp.push(new Message('attack', {
+                    position: { x: diff.x, y: diff.y },
+                    currentuser: userIdx,
+                    status: resStr
+                }, room.users[1].user.login));
+            });
+            if (res === 4) {
+                const activeuser = userIdx > 0 ? 0 : 1;
+                resp.push(...turn(room, activeuser));
+            }
+            else if (res === 3 && room.isEndGame(userIdx)) {
+                resp.push(...win(room, userIdx));
+            }
+            return resp;
+        }
+        else {
+            erTxt = 'Not your turn';
+        }
+
+    }
+
+    resp.push(new Message(request.type, {
+        error: err,
+        errorText: erTxt,
+    }, rcpt));
+
+    return resp;
+}
 function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
     msgs.forEach(msg => {
         const str: string = msg.toString();
@@ -287,6 +351,11 @@ export function processServer(session: Session, request: Message): Message[] {
             break;
         case "add_ships":
             addShips(session, request).forEach(resp => {
+                response.push(resp);
+            });
+            break;
+        case 'attack':
+            attack(session, request).forEach(resp => {
                 response.push(resp);
             });
             break;

@@ -1,6 +1,6 @@
 import { User } from "./user";
-import { Game } from "./game";
-import { Ship } from "./ship";
+import { Game, GameField } from "./game";
+import { Ship, StateShip } from "./ship";
 class userInRoom {
     user: User;
     idx: number;
@@ -68,6 +68,23 @@ export class Room {
             return true;
         }
         return false;
+    }
+    attack(userIdx: number, x: number, y: number): GameField[] {
+        let idx: number = 1;
+        if (userIdx > 0) {
+            idx = 0;
+        }
+
+        return this.users[idx].game.getShipHit(x, y);
+    }
+    isEndGame(userIdx: number): boolean {
+        let idx: number = 1;
+        if (userIdx > 0) {
+            idx = 0;
+        }
+        const numShipKilled = this.users[idx].game.shipNumState(StateShip.KILLED);
+
+        return numShipKilled === this.users[idx].game.ship.length ? true : false;
     }
     toJSON() {
         let json = {
