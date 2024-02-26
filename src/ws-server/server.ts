@@ -178,6 +178,19 @@ function win(room: Room, winner: number): Message[] {
     }
     return resp;
 }
+function turn(room: Room, activeUser: number): Message[] {
+    const resp = new Array<Message>;
+    if (room && room.userNumInState(UserState.READY) === 2) {
+        resp.push(new Message('turn', {
+            currUser: activeUser
+        }, room.users[0].user.login));
+        resp.push(new Message('turn', {
+            currUser: activeUser
+        }, room.users[1].user.login));
+        room.activeuserIdx = activeUser;
+    }
+    return resp;
+}
 function sendMess(wss: WebSocketServer, ws: WebSocket, msgs: Message[]) {
     msgs.forEach(msg => {
         const str: string = msg.toString();
