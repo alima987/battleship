@@ -1,4 +1,4 @@
-export class CreateGame {
+export class Room {
     id: string;
     player_id: string;
 
@@ -6,5 +6,4 @@ export class CreateGame {
         this.id = id
         this.player_id = player_id
     }
-
 }
