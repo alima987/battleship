@@ -121,23 +121,26 @@ const createRoom = (session: Session, request: Message): Message => {
 
     return new Message("create_room", { error: error, errorText: errorText,}, 'all',)
 }
+const addUserToRoom = (session: Session, request: Message): Message[] => {
+  let error: boolean = false
+  let errorText: string = 'Unable to add player to the room';
+  const player = session.player
+  const data = JSON.parse(request.data)
+  const roomId = data.indexRoom
+  const res = new Array<Message>
 
-const parseMessages = (session: Session, request: Message) => {
-    let response = new Array<Message>
-    switch(request.type) {
-      case "reg": 
-        response.push(playerRegistration(session, request))
-        response.push(updateWinners())
-        response.push(updateRooms())
-        break;
-      case "create_room":
-        response.push(createRoom(session, request)) 
-        break; 
-      default:
-        response.push(new Message("error", { 'error': true, 'errorText': "Unknow message type" }));
-        break;
+  if (player && roomId) {
+    const room = roomsById.get(roomId)
+    if (room) {
+        if (room.players.length === 1 && room.players[0].player.login != player.login) {
+            room.addPlayer(player)
+            res.push(updateRooms())
+            res.push(new Message( 'create_game', { idGame: roomId, idPlayer: 1 }))
+            res.push(new Message( 'create_game', { idGame: roomId, idPlayer: 0 }, room.players[0].player.login))
+        }
     }
-    return response
+  }
+   return res
 }
 const sendMessages = (wss: WebSocketServer, ws: WebSocket, msgs: Message[]) => {
     msgs.forEach(msg => {
@@ -179,6 +182,28 @@ const sendMessages = (wss: WebSocketServer, ws: WebSocket, msgs: Message[]) => {
     });
 }
 
+const parseMessages = (session: Session, request: Message) => {
+    let response = new Array<Message>
+    switch(request.type) {
+      case "reg": 
+        response.push(playerRegistration(session, request))
+        response.push(updateWinners())
+        response.push(updateRooms())
+        break;
+      case "create_room":
+        response.push(createRoom(session, request)) 
+        break; 
+      case "add_user_to_room":
+        addUserToRoom(session, request).forEach((res) => {
+            response.push(res)
+        })
+        break;  
+      default:
+        response.push(new Message("error", { 'error': true, 'errorText': "Unknow message type" }));
+        break;
+    }
+    return response
+}
 
 wss.on('connection', (ws: WebSocket) => {
     const session: Session = new Session(uuid.v4(), ws, SessionState.OPEN)
