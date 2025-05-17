@@ -1,5 +1,5 @@
-import { Player } from "./player";
-import WebSocket, { OPEN } from "ws";
+import { Player } from "./player.ts";
+import WebSocket from "ws";
 
 export enum SessionState {
     OPEN,
@@ -13,7 +13,7 @@ export class Session {
     state: SessionState;
     ws: WebSocket;
 
-    constructor(id: string, ws: WebSocket, state: SessionState = OPEN) {
+    constructor(id: string, ws: WebSocket, state: SessionState = WebSocket.OPEN) {
         this.id = id;
         this.ws = ws;
         this.state = state;
