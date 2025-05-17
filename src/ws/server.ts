@@ -4,6 +4,7 @@ import * as uuid from 'uuid';
 import { Player } from '../response/player.ts';
 import { Room } from '../response/room.ts';
 import { Message, Session, SessionState } from '../response/session.ts';
+import { error } from 'console';
 
 export const server = http.createServer();
 const wss = new WebSocketServer({ server });
@@ -12,7 +13,9 @@ const players = new Map<string, Player>()
 const winners = new Map<string, number>()
 const playersSessions = new Map<string, Session>();
 const sessions = new Set<Session>();
-export const rooms = new Map<string, Room>();  
+const rooms = new Set<Room>();
+let roomInx = 1
+const roomsById = new Map<number, Room>()
 
 const getPlayers = (login: string): Player | undefined => {
   const player = players.get(login)
@@ -91,6 +94,33 @@ const updateWinners = (winner: string = ''): Message => {
   data.sort((a, b) => { return (b.wins - a.wins) })
   return new Message('update_winners', data, 'all')
 }
+const updateRooms = (): Message => {
+    let data: { roomId: number; roomUsers: { name: string; index: number | string; }[]; }[] = []
+
+    rooms.forEach((el) => {
+      if (el.players.length === 1) {
+        data.push(el.toJSON())
+      }
+    })
+    return new Message('update_room', data, 'all')
+}
+const createRoom = (session: Session, request: Message): Message => {
+  let error: boolean = false
+  let errorText: string = 'Unable to create room';
+  const player = session.player
+  if (player) {
+    const id = roomInx++
+    const newRoom = new Room(id)
+    newRoom.addPlayer(player)
+    rooms.add(newRoom)
+    roomsById.set(id, newRoom)
+    const res = updateRooms()
+    res.rcpt = 'all'
+    return res
+  }
+
+    return new Message("create_room", { error: error, errorText: errorText,}, 'all',)
+}
 
 const parseMessages = (session: Session, request: Message) => {
     let response = new Array<Message>
@@ -98,7 +128,11 @@ const parseMessages = (session: Session, request: Message) => {
       case "reg": 
         response.push(playerRegistration(session, request))
         response.push(updateWinners())
+        response.push(updateRooms())
         break;
+      case "create_room":
+        response.push(createRoom(session, request)) 
+        break; 
       default:
         response.push(new Message("error", { 'error': true, 'errorText': "Unknow message type" }));
         break;
