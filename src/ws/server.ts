@@ -2,7 +2,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import * as http from 'http';
 import * as uuid from 'uuid';
 import { Player } from '../response/player.ts';
-import { Room } from '../response/room.ts';
+import { PlayerState, Room } from '../response/room.ts';
 import { Message, Session, SessionState } from '../response/session.ts';
 import { error } from 'console';
 
@@ -141,6 +141,20 @@ const addUserToRoom = (session: Session, request: Message): Message[] => {
     }
   }
    return res
+}
+function turn(room: Room, activePlayer: number): Message[] {
+    const resps = new Array<Message>;
+
+    if (room && room.numPlayersInState(PlayerState.READY) === 2) {
+        resps.push(new Message('turn', {
+            currentPlayer: activePlayer
+        }, room.players[0].player.login));
+        resps.push(new Message('turn', {
+            currentPlayer: activePlayer
+        }, room.players[1].player.login));
+        room.player_id = activePlayer;
+    }
+    return resps;
 }
 const sendMessages = (wss: WebSocketServer, ws: WebSocket, msgs: Message[]) => {
     msgs.forEach(msg => {

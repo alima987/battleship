@@ -1,4 +1,6 @@
+import { GameField } from "./game";
 import { Player } from "./player";
+import { Ship } from "./ship";
 
 export enum PlayerState {
     NONE,
@@ -15,12 +17,14 @@ class PlayerInRoom {
     idx: number;
     state: PlayerState;
     shipsPlacedCount: number;
+    gameField: GameField;
 
     constructor(player: Player, idx: number, state: PlayerState = PlayerState.CONNECTED) {
         this.player = player;
         this.idx = idx;
         this.state = state;
         this.shipsPlacedCount = 0;
+        this.gameField = new GameField();
     }
 }
 export class Room {
@@ -44,6 +48,29 @@ export class Room {
         }
       }
       return false
+    }
+    addShips(playerIdx: number, ships: Array<{ poistion: { x: number, y: number }, type: string, length: number }>): boolean {
+      const player = this.players[playerIdx]
+      if (player) { 
+        const field = player.gameField
+        ships.forEach(el => {
+            const ship = Ship.fromJson(el)
+            if (!field.addShip(ship)) return false
+        })
+        player.state = PlayerState.READY;
+        return true
+      }
+      return false
+    }
+    numPlayersInState(state: PlayerState): number {
+        let num = 0;
+        this.players.forEach(player => {
+            if (player.state === state) {
+                num++;
+            }
+        });
+
+        return num;
     }
     toJSON() {
         let json = {
