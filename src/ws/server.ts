@@ -156,6 +156,65 @@ function turn(room: Room, activePlayer: number): Message[] {
     }
     return resps;
 }
+function win(room: Room, winner: number): Message[] {
+    const resps = new Array<Message>;
+
+    if (room && room.numPlayersInState(PlayerState.READY) === 2) {
+        resps.push(new Message('finish', {
+            winPlayer: winner
+        }, room.players[0].player.login));
+        resps.push(new Message('finish', {
+            winPlayer: winner
+        }, room.players[1].player.login));
+        rooms.delete(room);
+        resps.push(updateRooms());
+        resps.push(updateWinners(room.players[winner].player.login));
+    }
+    return resps;
+}
+function addShips(session: Session, request: Message): Message[] {
+    let err: boolean = true;
+    let erTxt: string = 'Unable to add ships';
+    let rcpt = '';
+    const data = JSON.parse(request.data);
+    const roomId = data.gameId;
+    const resps = new Array<Message>;
+    const room = roomsById.get(roomId);
+    if (room) {
+        const playerIdx = data.indexPlayer;
+      
+        if (room.addShips(playerIdx, data.ships)) {
+            if (room.numPlayersInState(PlayerState.READY) === 2) {
+                const activePlayer = Math.round(Math.random());
+              
+                resps.push(new Message('start_game', {
+                    ships: room.players[0].gameField.getShipsAsJson(),
+                    currentPlayerIndex: activePlayer
+                }, room.players[0].player.login));
+                resps.push(new Message('start_game', {
+                    ships: room.players[1].gameField.getShipsAsJson(),
+                    currentPlayerIndex: activePlayer
+                }, room.players[1].player.login));
+                resps.push(...turn(room, activePlayer));
+                return resps;
+            }
+            else {
+                err = false;
+                erTxt = 'Ships added';
+                rcpt = 'none';
+            }
+        }
+
+    }
+
+    resps.push(new Message(request.type, {
+        error: err,
+        errorText: erTxt,
+    }, rcpt));
+
+    return resps;
+}
+
 const sendMessages = (wss: WebSocketServer, ws: WebSocket, msgs: Message[]) => {
     msgs.forEach(msg => {
         const str: string = msg.toString();
@@ -212,6 +271,11 @@ const parseMessages = (session: Session, request: Message) => {
             response.push(res)
         })
         break;  
+      case "add_ships":
+        addShips(session, request).forEach(resp => {
+            response.push(resp);
+        });
+        break;
       default:
         response.push(new Message("error", { 'error': true, 'errorText': "Unknow message type" }));
         break;
@@ -242,6 +306,14 @@ wss.on('connection', (ws: WebSocket) => {
         const player = session.player;
         if (player) {
             playersSessions.delete(player.login)
+             rooms.forEach(room => {
+                room.players.forEach((p, i) => {
+                    if (p.player && p.player.login === player.login) {
+                        const activePlayer = i > 0 ? 0 : 1;
+                        sendMessages(wss, ws, win(room, activePlayer));
+                    }
+                });
+            });
         }
        sessions.delete(session);
     });
