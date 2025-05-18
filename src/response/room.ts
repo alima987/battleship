@@ -1,6 +1,6 @@
-import { GameField } from "./game";
+import { FieldDiff, GameField } from "./game";
 import { Player } from "./player";
-import { Ship } from "./ship";
+import { Ship, ShipState } from "./ship";
 
 export enum PlayerState {
     NONE,
@@ -61,6 +61,24 @@ export class Room {
         return true
       }
       return false
+    }
+    attack(playerIdx: number, x: number, y: number): FieldDiff[] {
+        let idx: number = 1;
+        if (playerIdx > 0) {
+            idx = 0;
+        }
+
+        return this.players[idx].gameField.checkShipHit(x, y);
+    }
+    isGameOver(playerIdx: number): boolean {
+        let idx: number = 1;
+        if (playerIdx > 0) {
+            idx = 0;
+        }
+
+        const numShipsKilled = this.players[idx].gameField.numShipsInState(ShipState.KILLED);
+
+        return numShipsKilled === this.players[idx].gameField.ships.length ? true : false;
     }
     numPlayersInState(state: PlayerState): number {
         let num = 0;
