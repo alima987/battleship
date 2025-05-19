@@ -4,7 +4,6 @@ import * as uuid from 'uuid';
 import { Player } from '../response/player.ts';
 import { PlayerState, Room } from '../response/room.ts';
 import { Message, Session, SessionState } from '../response/session.ts';
-import { error } from 'console';
 
 export const server = http.createServer();
 const wss = new WebSocketServer({ server });
@@ -279,6 +278,40 @@ function attack(session: Session, request: Message): Message[] {
 
     return resps;
 }
+function randomAttack(session: Session, request: Message): Message[] {
+    let err: boolean = true;
+    let erTxt: string = 'Unable to attack';
+    const data = JSON.parse(request.data);
+    const roomId = data.gameId;
+    const playerIdx = data.indexPlayer;
+    const resps = new Array<Message>;
+    const room = roomsById.get(roomId);
+    if (room) {
+        const playerIdx = data.indexPlayer;
+        if (room.player_id === playerIdx) {
+            const { x, y } = room.getRndXY4Attack(playerIdx);
+            resps.push(...attack(session,
+                new Message('attack', JSON.stringify({
+                    gameId: roomId,
+                    x: x,
+                    y: y,
+                    indexPlayer: playerIdx
+                }))
+            ));
+            return resps;
+        }
+        else {
+            erTxt = 'Not your turn';
+        }
+    }
+
+    resps.push(new Message(request.type, {
+        error: err,
+        errorText: erTxt,
+    }));
+
+    return resps;
+}
 
 const sendMessages = (wss: WebSocketServer, ws: WebSocket, msgs: Message[]) => {
     msgs.forEach(msg => {
@@ -346,6 +379,11 @@ const parseMessages = (session: Session, request: Message) => {
             response.push(resp);
         });
         break;
+      case 'randomAttack':
+        randomAttack(session, request).forEach(resp => {
+            response.push(resp);
+        });
+            break;
       default:
         response.push(new Message("error", { 'error': true, 'errorText': "Unknow message type" }));
         break;

@@ -1,4 +1,4 @@
-import { Ship, ShipState } from "./ship";
+import { Ship, ShipState } from "./ship.ts";
 
 export class FieldDiff {
     x: number;
@@ -40,7 +40,8 @@ export class GameField {
         }
         return true;
     }
-checkShipHit(x: number, y: number): FieldDiff[] {
+
+    checkShipHit(x: number, y: number): FieldDiff[] {
         let res = 4;
         let diff = new Array<FieldDiff>;
         if (x >= 0 && x < 10 && y >= 0 && y < 10) {
@@ -78,6 +79,8 @@ checkShipHit(x: number, y: number): FieldDiff[] {
 
         return diff;
     }
+
+
     getFieldsDiffs4KilledShip(ship: Ship): FieldDiff[] {
         const res = new Array<FieldDiff>;
         let sx = ship.start_x - 1;
@@ -106,6 +109,8 @@ checkShipHit(x: number, y: number): FieldDiff[] {
         return res;
     }
 
+
+
     numShipsInState(state: ShipState): number {
         let num = 0;
         this.ships.forEach(ship => {
@@ -116,6 +121,20 @@ checkShipHit(x: number, y: number): FieldDiff[] {
 
         return num;
     }
+
+    printField() {
+        console.log("____________");
+        for (let x = 0; x < 10; x++) {
+            let str = "|";
+            for (let y = 0; y < 10; y++) {
+                str = str + this.field[x * 10 + y];
+            }
+            console.log(str + "|");
+        }
+        console.log("~~~~~~~~~~~~");
+    }
+
+
     getShipsAsJson() {
         const ships = new Array<{ position: { x: number, y: number }, direction: boolean, length: number, type: string }>;
         this.ships.forEach(ship => {

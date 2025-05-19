@@ -1,6 +1,6 @@
-import { FieldDiff, GameField } from "./game";
-import { Player } from "./player";
-import { Ship, ShipState } from "./ship";
+import { FieldDiff, GameField } from "./game.ts";
+import { Player } from "./player.ts";
+import { Ship, ShipState } from "./ship.ts";
 
 export enum PlayerState {
     NONE,
@@ -90,6 +90,29 @@ export class Room {
 
         return num;
     }
+     getRndXY4Attack(playerIdx: number): { x: number, y: number } {
+        let pnt = Math.floor(Math.random() * 99);
+        let dir = Math.round(Math.random()) == 1 ? 1 : -1;
+        console.log("Random index: " + pnt);
+        console.log("Random direction: " + dir);
+        const field = this.players[playerIdx].gameField.field;
+        let idx = pnt;
+        while (field[idx] != 0 && idx < 99 && idx > 0) {
+            idx = idx + dir;
+        }
+        if (field[idx] != 0) {
+            let idx = pnt;
+            while (field[idx] != 0 && idx < 99 && idx > 0) {
+                idx = idx - dir;
+            }
+        }
+        const y = Math.floor(idx / 10);
+        const x = idx % 10;
+        console.log(`{ x: ${x}, y: ${y} }`);
+
+        return { x: x, y: y };
+    }
+
     toJSON() {
         let json = {
              roomId: this.id,
